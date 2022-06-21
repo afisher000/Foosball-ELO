@@ -10,15 +10,9 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 players = np.array([
-    'andy',     'josh',     'krish',    'river',
-    'nate',     'lawler',   'pietro',   'paul',
-    'eric',     'andonian', 'amir',     'max',
-    'edmund',   'ryan',     'obed',     'walter',
-    'victor',   'yeou',     'sophie',   'jordan',
-    'eddie',    'kunal',    'monika',   'kirill',
-    'jack',     'igor',     'claire',   'anshul',
-    'alex',     'jacob',    'emma',     'pratik',
-    'kristian', 'chad',     'VOID'    ])
+    'atharva',  'andy',     'alex',     'sophie',   'pietro',
+    'lucy',     'paul',     'lawler',   'max',      'andonian',
+    'eric',     'VOID'])
 
 # 1000 Initial Rating
 ratings = dict(zip(players, 1000*np.ones(len(players))))
@@ -35,8 +29,7 @@ gamelog = gamelog[~singles] #Drop singles
 name_errors = (~gamelog[['WO','WD','LO','LD']].isin(players)).any(axis=1)
 if name_errors.sum()>0:
     print(gamelog.loc[name_errors])
-    raise Exception('These rows have unidentified players.\n',
-          +'Use the add_player function to add new names\n')
+    raise Exception('These rows have unidentified players.\n')
     
 # Check gamelog scores are correct
 score_errors = ~gamelog.Score.isin(range(10))
@@ -46,11 +39,15 @@ if score_errors.sum()>0:
     
 # Update Ratings
 spread = 200
-k = 32
+k = 64
 week_ago_index = (gamelog.index>gamelog.index.max()-timedelta(7)).argmax()
 for irow in range(gamelog.shape[0]):
     game = gamelog.iloc[irow]
 
+    # Save ratings from a week ago
+    if irow == week_ago_index:
+        prev_ratings = ratings.copy()
+        
     # Compute actual and expected point-win ratios
     W_rating = ratings[game.WO]/2 + ratings[game.WD]/2
     L_rating = ratings[game.LO]/2 + ratings[game.LD]/2
@@ -65,9 +62,7 @@ for irow in range(gamelog.shape[0]):
     ratings[game.LD]-= rating_change
     ratings['VOID'] = 1000 #VOID rating never changes
     
-    # Save ratings from a week ago
-    if irow == week_ago_index:
-        prev_ratings = ratings.copy()
+
 
 # Find active players in last month
 last_month_games = gamelog[gamelog.index>(gamelog.index.max()-timedelta(30))]
@@ -77,11 +72,11 @@ active_players = np.unique(last_month_games[['WO','WD','LO','LD']])
 cur_ratings = pd.Series({name:ratings[name] for name in active_players})
 prev_ratings = pd.Series({name:prev_ratings[name] for name in active_players})
 diff_ratings = cur_ratings - prev_ratings
-diff_rankings = cur_ratings.rank() - prev_ratings.rank()
+diff_rankings = cur_ratings.rank(method='min') - prev_ratings.rank(method='min')
 
 # Write weekly results to csv
 week_results_dict = {'Name':cur_ratings.index,
-                     'Rank':cur_ratings.rank(ascending=False),
+                     'Rank':cur_ratings.rank(ascending=False, method='min'),
                      'Rank Change':diff_rankings,
                      'Rating':cur_ratings.values,
                      'Rating Change':diff_ratings}
