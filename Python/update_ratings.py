@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 players = np.array([
     'atharva',  'andy',     'alex',     'sophie',   'pietro',
     'lucy',     'paul',     'lawler',   'max',      'andonian',
-    'eric',     'VOID'])
+    'eric',     'jake',     'obed',     'pratik',   'VOID'])
 
 # 1000 Initial Rating
 ratings = dict(zip(players, 1000*np.ones(len(players))))
