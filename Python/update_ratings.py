@@ -21,7 +21,7 @@ ratings = dict(zip(players, 1000*np.ones(len(players))))
 gamelog = pd.read_csv('Game Log.csv')
 gamelog.set_index('Date', inplace=True)
 gamelog.index = gamelog.index.map(lambda x: datetime.strptime(x, '%m/%d/%Y'))
-singles = (gamelog['WO']==gamelog['WD']) & (gamelog['LO']==gamelog['LD'])
+singles = (gamelog.WO==gamelog.WD) & (gamelog.LO==gamelog.LD)
 gamelog = gamelog[~singles] #Drop singles
 
 
@@ -68,7 +68,7 @@ for irow in range(gamelog.shape[0]):
 last_month_games = gamelog[gamelog.index>(gamelog.index.max()-timedelta(30))]
 active_players = np.unique(last_month_games[['WO','WD','LO','LD']])
 
-# Find change in rating and ranking
+# Find change in rating and ranking for active players
 cur_ratings = pd.Series({name:ratings[name] for name in active_players})
 prev_ratings = pd.Series({name:prev_ratings[name] for name in active_players})
 diff_ratings = cur_ratings - prev_ratings
@@ -90,6 +90,7 @@ def compute_stats(gamelog, players, game_limit=20):
     entries = ['Games','Wins','Losses','OffWins','OffLosses','DefWins','DefLosses',
              'WinPct','LossPct','OffWinPct','DefWinPct','PointsFor','PointsAgainst',
              'PointsDiff','PointMargin']
+    
     stats = pd.DataFrame(index = entries)
     
     # If no players specified, return empty df
@@ -100,15 +101,8 @@ def compute_stats(gamelog, players, game_limit=20):
         offwins, defwins, offlosses, deflosses, _ = (gamelog==player).sum()
         wins = offwins + defwins
         losses = offlosses + deflosses
-        if offwins+offlosses==0:
-            offwinpct=np.nan
-        else:
-            offwinpct = offwins/(offwins+offlosses)
-    
-        if defwins+deflosses==0:
-            defwinpct=np.nan
-        else:
-            defwinpct = defwins/(defwins+deflosses)
+        offwinpct = np.nan if (offwins+offlosses==0) else offwins/(offwins+offlosses)
+        defwinpct = np.nan if (defwins+deflosses==0) else defwins/(defwins+deflosses)
             
         games = wins + losses
         Pfor = wins*10 + gamelog.Score[(gamelog.LO==player)|(gamelog.LD==player)].sum()
