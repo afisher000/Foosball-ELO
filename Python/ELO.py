@@ -27,7 +27,7 @@ class ELO():
             'atharva',  'andy',     'alex',     'sophie',   'pietro',
             'lucy',     'paul',     'lawler',   'max',      'andonian',
             'eric',     'jake',     'obed',     'pratik',   'fabio',
-            'stefano',  'david',
+            'stefano',  'david',    'yunbo',    'river',    'josh',
             'VOID'])
         
         self.check_gamelog()
@@ -52,14 +52,14 @@ class ELO():
         return
         
     def get_par(self):
-        # Add wins-above-replacement column to gamelog
+        # Add points-above-replacement column to gamelog
         r = self.get_ratings()
         gl = self.gamelog.copy()
         W_rating = r[gl.WO+'_off'].values/2 + r[gl.WD+'_def'].values/2
         L_rating = r[gl.LO+'_off'].values/2 + r[gl.LD+'_def'].values/2
         actual_win_ratio = 10/(gl.Score.values+10)
         expected_win_ratio = (1+10**((L_rating-W_rating)/self.spread))**(-1)
-        gl['par'] = self.k * (actual_win_ratio - expected_win_ratio)
+        gl['points_gained'] = self.k * (actual_win_ratio - expected_win_ratio)
         return gl
         
         
@@ -133,8 +133,7 @@ class ELO():
             return
         
         # Make ratings dataframe
-        r = pd.DataFrame()
-        r.index = self.active_players
+        r = pd.DataFrame(index=self.active_players)
         r['cur_offense'] = [self.cur_r[name+'_off'] for name in self.active_players]
         r['cur_defense'] = [self.cur_r[name+'_def'] for name in self.active_players]
         r['cur_total'] = r.cur_offense/2 + r.cur_defense/2
@@ -146,7 +145,7 @@ class ELO():
         r['total_rating_change'] = r.cur_total - r.prev_total
         r['cur_rank'] = r.cur_total.rank(ascending=False, method='min')
         r['prev_rank'] = r.prev_total.rank(ascending=False, method='min')
-        r['rank_change'] = r.cur_rank - r.prev_rank
+        r['rank_change'] = r.prev_rank - r.cur_rank 
         r.sort_values(by='cur_rank', inplace=True)
         r = r.astype(int)
         
