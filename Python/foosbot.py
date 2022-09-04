@@ -29,6 +29,15 @@ players = (elo.gamelog[['WO','WD','LO','LD']]
            .apply(pd.Series.value_counts)
            .sum(axis=1)
            .sort_values(ascending=False).index)
+
+## TODO
+# Add ratings() function
+
+
+# Load initial data
+elo = ELO('Game Log.csv', k=64, spread=200)
+elo.simulate()
+players = np.unique(elo.gamelog[['WO','WD','LO','LD']].values)
 ratings = elo.get_ratings()
 
 
@@ -127,6 +136,9 @@ def add_game(ack, body, logger):
     temp = elo.gamelog.copy()
     temp.Date = temp.Date.map(lambda x: x.strftime('%m/%d/%Y'))
     temp.to_csv('Game Log.csv', index=False)
+    elo.gamelog.loc[len(elo.gamelog)] = [WO, WD, LO, LD, int(score), 
+                                 datetime.date.today().strftime('%m/%d/%Y'), color[0]]
+    elo.gamelog.to_csv('Game Log.csv', index=False)
     
     # Compute update ratings
     spread = 200
@@ -136,6 +148,9 @@ def add_game(ack, body, logger):
     actual_win_ratio = 10/(int(score)+10)
     expected_win_ratio = (1+10**((L_rating-W_rating)/elo.spread))**(-1)
     rating_change = elo.k * (actual_win_ratio - expected_win_ratio)
+    expected_win_ratio = (1+10**((L_rating-W_rating)/spread))**(-1)
+    rating_change = k * (actual_win_ratio - expected_win_ratio)
+
     if rating_change>0:
         bot_message = f'Added game to database. Winners gain {rating_change:.1f} rating'
     else:
@@ -176,10 +191,10 @@ def handle_mentions(event, say, ack):
         say(token=SLACK_BOT_USER_TOKEN, 
             text = 'Can not parse input.')
         keyword = 'help'
+        return
     
     
-    
-    # Switch structure
+    # new game
     if keyword=='newgame':
         app.client.chat_postMessage(
             token=SLACK_BOT_USER_TOKEN,
@@ -221,6 +236,6 @@ def handle_mentions(event, say, ack):
         
         
         
-        
+    
 if __name__=="__main__":
     SocketModeHandler(app, SLACK_BOT_TOKEN).start()
