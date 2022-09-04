@@ -18,8 +18,8 @@ from ELO import ELO
 
 
 # Tokens (export to environment variable in future)
-SLACK_BOT_TOKEN = 'xapp-1-A041BLUJ1C1-4032980761635-3f1feaa3bb3774828420536a2ac8c21d636ae5279a69e216aac9e53d4caa53bf'
-SLACK_BOT_USER_TOKEN = 'xoxb-4030047472195-4035541061012-ShTpBM2Uo5QXzEIU4l4GNI8w'
+SLACK_BOT_TOKEN = os.environ['SLACK_BOT_TOKEN']
+SLACK_BOT_USER_TOKEN = os.environ['SLACK_BOT_USER_TOKEN']
 app = App(token=SLACK_BOT_TOKEN)
 
 # Load initial data
