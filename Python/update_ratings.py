@@ -9,24 +9,23 @@ from ELO import ELO
 import pandas as pd
 import numpy as np
 import scipy.optimize
+import matplotlib.pyplot as plt
+plt.close('all')
 
-
-date = '07/15/2022'
+date = '08/15/2022'
 gamelog_file = 'Game Log.csv'
-elo = ELO(gamelog_file, datestr=date, k=100, spread=200)
-elo.simulate(single_rating=True)
+elo = ELO(gamelog_file, datestr=date, k=64, spread=200)
+elo.simulate(single_rating=False)
+elo.print_results()
 gl = elo.get_par()
 
-gl.par.hist(alpha=.2, color='k')
-gl[gl.Color=='r'].par.hist(alpha=.2, color='r')
-gl[gl.Color=='b'].par.hist(alpha=.2, color='b')
 
+red = gl[gl.Color=='r']
+blue = gl[gl.Color=='b']
 
-
-
-
-
-
+print('Points Gained by Winners')
+print(f'Blue: Mean={blue.points_gained.mean():.2f}, Std={blue.points_gained.std():.2f}')
+print(f'Red: Mean={red.points_gained.mean():.2f}, Std={red.points_gained.std():.2f}')
 
 # =============================================================================
 # # Construct stats by color
