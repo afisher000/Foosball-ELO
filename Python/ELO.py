@@ -16,7 +16,7 @@ class ELO():
     def __init__(self, gamelog_file, k=64, spread=200, datestr=None):
         
         if datestr is None:
-            self.data = datetime.today()
+            self.date = datetime.today()
         else:
             self.date = datetime.strptime(datestr, '%m/%d/%Y')
             
