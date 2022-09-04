@@ -28,7 +28,8 @@ class ELO():
             'lucy',     'paul',     'lawler',   'max',      'andonian',
             'eric',     'jake',     'obed',     'pratik',   'fabio',
             'stefano',  'david',    'yunbo',    'river',    'josh',
-            'VOID'])
+            'elisa'
+            ])
         
         self.check_gamelog()
     

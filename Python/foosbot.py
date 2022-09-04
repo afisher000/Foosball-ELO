@@ -22,14 +22,13 @@ SLACK_BOT_TOKEN = 'xapp-1-A041BLUJ1C1-4032980761635-3f1feaa3bb3774828420536a2ac8
 SLACK_BOT_USER_TOKEN = 'xoxb-4030047472195-4035541061012-ShTpBM2Uo5QXzEIU4l4GNI8w'
 app = App(token=SLACK_BOT_TOKEN)
 
-## TODO
-# Add ratings() function
-
-
 # Load initial data
 elo = ELO('Game Log.csv', k=64, spread=200)
 elo.simulate()
-players = np.unique(elo.gamelog[['WO','WD','LO','LD']].values)
+players = (elo.gamelog[['WO','WD','LO','LD']]
+           .apply(pd.Series.value_counts)
+           .sum(axis=1)
+           .sort_values(ascending=False).index)
 ratings = elo.get_ratings()
 
 
@@ -65,6 +64,12 @@ def button_block(id_, text):
 
     return block
 
+def text_block(text):
+    block = {'type':'section',
+             'text':{'type':'mrkdwn',
+                     'text':text}
+             }
+    return block
 
 
 def new_game_block(players):
@@ -117,9 +122,11 @@ def add_game(ack, body, logger):
         
     
     # Add to gamelog and save
-    gamelog.loc[len(gamelog)] = [WO, WD, LO, LD, int(score), 
-                                 datetime.date.today().strftime('%m/%d/%Y'), color[0]]
-    gamelog.to_csv('Game Log.csv', index=False)
+    elo.gamelog.loc[len(elo.gamelog)] = [WO, WD, LO, LD, int(score), 
+                                 datetime.date.today(), color[0]]
+    temp = elo.gamelog.copy()
+    temp.Date = temp.Date.map(lambda x: x.strftime('%m/%d/%Y'))
+    temp.to_csv('Game Log.csv', index=False)
     
     # Compute update ratings
     spread = 200
@@ -127,8 +134,8 @@ def add_game(ack, body, logger):
     W_rating = ratings[WO+'_off']/2 + ratings[WD+'_def']/2
     L_rating = ratings[LO+'_off']/2 + ratings[LD+'_def']/2
     actual_win_ratio = 10/(int(score)+10)
-    expected_win_ratio = (1+10**((L_rating-W_rating)/spread))**(-1)
-    rating_change = k * (actual_win_ratio - expected_win_ratio)
+    expected_win_ratio = (1+10**((L_rating-W_rating)/elo.spread))**(-1)
+    rating_change = elo.k * (actual_win_ratio - expected_win_ratio)
     if rating_change>0:
         bot_message = f'Added game to database. Winners gain {rating_change:.1f} rating'
     else:
@@ -167,13 +174,12 @@ def handle_mentions(event, say, ack):
         mention, keyword, arg = [group.strip() for group in groups]
     except:
         say(token=SLACK_BOT_USER_TOKEN, 
-            text='''Cannot parse input. The following are possible commands:
-                @foosbot newgame()
-                @foosbot newplayer(player_name)''')
-        return
+            text = 'Can not parse input.')
+        keyword = 'help'
     
     
-    # new game
+    
+    # Switch structure
     if keyword=='newgame':
         app.client.chat_postMessage(
             token=SLACK_BOT_USER_TOKEN,
@@ -185,6 +191,36 @@ def handle_mentions(event, say, ack):
     elif keyword=='newplayer':
         players = np.append(players, arg)
         say(token=SLACK_BOT_USER_TOKEN, text=f'Added new player "{arg}"')
+        
+    elif keyword=='help':
+        say(token=SLACK_BOT_USER_TOKEN, 
+            text='''The following are possible commands:
+                @foosbot newgame()
+                @foosbot newplayer(new_player_name)
+                @foosbot ratings()''')
+        
+    elif keyword=='ratings':
+        cutoff_date = datetime.datetime.today() - datetime.timedelta(30)
+        cur_players = np.unique(elo.gamelog[elo.gamelog.Date>cutoff_date][['WO','WD','LO','LD']])
+        rating_table = pd.DataFrame(index=cur_players)
+        rating_table['Offense'] = ratings[cur_players+'_off'].values
+        rating_table['Defense'] = ratings[cur_players+'_def'].values
+        rating_table['Total'] = rating_table.Offense/2 + rating_table.Defense/2
+        rating_table.sort_values(by='Total', ascending=False, inplace=True)
+        rating_table[['Offense','Defense','Total']] = rating_table[['Offense','Defense','Total']].applymap(lambda x: f'{x:6.0f}')
+
+        app.client.chat_postMessage(token=SLACK_BOT_USER_TOKEN,
+                                    channel=event['channel'],
+                                    text='Ratings',
+                                    blocks = [{'type':'section',
+                                              'text':{'type':'mrkdwn',
+                                                      'text':"```"+ str(rating_table) +"```"}
+                                              }])
+        
+        
+        
+        
+        
         
 if __name__=="__main__":
     SocketModeHandler(app, SLACK_BOT_TOKEN).start()
