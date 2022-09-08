@@ -9,10 +9,11 @@ class Blocks():
     def __init__(self):
         pass
     
+    def option_object(self, item):
+        return {'text':{'type':'plain_text', 'text':str(item)}, 'value':str(item)} 
+        
     def options_dict(self, items):
-        options = [{'text':{'type':'plain_text', 'text':str(item)}, 'value':str(item)} 
-                for item in items] 
-        return options
+        return [self.option_object(item) for item in items]
     
     def plain_text_input(self, block_id, label, action_id):
         block = {'type':'input',
@@ -36,7 +37,8 @@ class Blocks():
     
     def static_select(self, block_id, text, items, 
                       action_id='static_select-action',
-                      placeholder_text='Select an item'):
+                      placeholder_text='Select an item',
+                      initial_option=None):
         block = {'type':'section',
                  'block_id':block_id,
                  'text':{'type':'mrkdwn',
@@ -49,6 +51,9 @@ class Blocks():
                               }
                  }
         
+        if initial_option is not None:
+            block['accessory']['initial_option'] = initial_option
+            
         return block
     
     def button(self, block_id, label, button_text, action_id='button-action'):

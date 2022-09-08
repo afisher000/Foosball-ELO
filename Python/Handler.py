@@ -11,6 +11,29 @@ from Blocks import Blocks
 import re
 import datetime
 
+
+# TO IMPLEMENT:
+    # Reformat menus, put players on one line
+    
+    # Include cancel buttons for messages (help keep channel clean)
+    
+    # colorbias()
+        # return stats for different colors
+        # image of distributions along with mean and std?
+    
+    # stats(player)
+        # Give stats for all time and last month
+        # Games, offensive win pct, defensive win pct, color pct
+        
+    # matchup(p1, p2, q1, q2)
+        # Find stats on games between (p1, p2) and (q1, q2).
+        # Good way to parse input like p1, q1? Use semicolon to separate teams?
+        
+    # tenzero(player)
+        # return list of ten zeros
+        # optionally, restrict to ten zeros for given player
+        
+        
 class Handler():
     def __init__(self, app, SLACK_BOT_TOKEN, SLACK_BOT_USER_TOKEN):
         self.elo = ELO('Game Log.csv', k=64, spread=200)
@@ -23,7 +46,7 @@ class Handler():
         self.app = app
 
     def parse_call(self, text, say):
-        regex = re.compile('(<[^>]*>)([\w\s]*)\((\w*)\)')
+        regex = re.compile('(<[^>]*>)([\w\s]*)\(([^\)]*)\)')
         try:
             groups = regex.search(text).groups()
             mention, keyword, item = [group.strip() for group in groups]
@@ -36,14 +59,41 @@ class Handler():
         return keyword, item
 
 
-    def new_game(self, channel):
+    def new_game(self, channel, item=''):
+        player_select = [None]*4
+        color_select = score_select = None
+        
+        args = item.split(',')
+        if len(args)>=4:
+            args = item.split(',')
+            for j, arg in enumerate(args[:4]):
+                player = arg.strip().lower()
+                if player in self.players:
+                    player_select[j] = self.Blocks.option_object(player)
+            
+        if len(args)>=5:
+            if args[4].strip() in list(map(str, range(10))):
+                score_select = self.Blocks.option_object(args[4].strip())
+                
+        if len(args)>=6:
+            color = args[5].strip().lower()
+            if color in ['red','blue']:
+                color_select = self.Blocks.option_object(color)
+        
+        
         blocks = [
-            self.Blocks.static_select('WO_id', 'Winner Offense', self.players),
-            self.Blocks.static_select('WD_id', 'Winner Defense', self.players),
-            self.Blocks.static_select('LO_id', 'Loser Offense', self.players),
-            self.Blocks.static_select('LD_id', 'Loser Defense', self.players),
-            self.Blocks.static_select('color_id', 'Winner Color', ['red','blue']),
-            self.Blocks.static_select('score_id', 'Score', range(10)),
+            self.Blocks.static_select('WO_id', 'Winner Offense', self.players,
+                                      initial_option = player_select[0]),
+            self.Blocks.static_select('WD_id', 'Winner Defense', self.players,
+                                      initial_option = player_select[1]),
+            self.Blocks.static_select('LO_id', 'Loser Offense', self.players,
+                                      initial_option = player_select[2]),
+            self.Blocks.static_select('LD_id', 'Loser Defense', self.players,
+                                      initial_option = player_select[3]),
+            self.Blocks.static_select('color_id', 'Winner Color', ['red','blue'],
+                                      initial_option = color_select),
+            self.Blocks.static_select('score_id', 'Score', range(10),
+                                      initial_option = score_select),
             self.Blocks.button('button_id', 'Add to Database', 'Submit', action_id='submit_game-action')
             ] 
 
@@ -130,9 +180,9 @@ class Handler():
         rating_change = self.update_ratings(WO, WD, LO, LD, score)
         
         if rating_change>0:
-            rating_message = f'Added game to database.\n{WO} and {WD} beat {LO} and {LD} with {color} 10-{score}\nWinners gain {rating_change:.1f} rating'
+            rating_message = f'Added game to database.\n{WO} and {WD} beat {LO} and {LD} 10-{score} with {color}\nWinners gain {rating_change:.1f} rating'
         else:
-            rating_message = f'Added game to database.\n{WO} and {WD} beat {LO} and {LD} with {color} 10-{score}\nLosers gain {-rating_change:.1f} rating'
+            rating_message = f'Added game to database.\n{WO} and {WD} beat {LO} and {LD} 10-{score} with {color}\nLosers gain {-rating_change:.1f} rating'
             
             
         
@@ -156,7 +206,7 @@ class Handler():
         
         # new game
         if keyword=='newgame':
-            self.new_game(event['channel'])
+            self.new_game(event['channel'], item)
             
         elif keyword=='newplayer':
             self.players = np.append(self.players, item)
@@ -175,7 +225,7 @@ class Handler():
             say(token=self.SLACK_BOT_USER_TOKEN, 
                 text='''Did not understand command...\n
                     The following are possible commands:
-                    @foosbot newgame()
+                    @foosbot newgame(WO, WD, LO, LD, score, color)
                     @foosbot newplayer(new_player_name)
                     @foosbot ratings()''')
 
