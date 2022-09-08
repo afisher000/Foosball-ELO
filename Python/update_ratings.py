@@ -12,7 +12,7 @@ import scipy.optimize
 import matplotlib.pyplot as plt
 plt.close('all')
 
-date = '08/15/2022'
+date = '9/6/2022'
 gamelog_file = 'Game Log.csv'
 elo = ELO(gamelog_file, datestr=date, k=64, spread=200)
 elo.simulate(single_rating=False)

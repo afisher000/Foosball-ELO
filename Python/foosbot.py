@@ -17,9 +17,6 @@ import datetime
 from ELO import ELO
 from Handler import Handler
 
-# os.environ['FOOSBOT_BOT_TOKEN'] = 'xapp-'
-# os.environ['FOOSBOT_BOT_USER_TOKEN'] = 'xoxb-'
-
 # Tokens
 SLACK_BOT_TOKEN = os.environ['FOOSBOT_BOT_TOKEN']
 SLACK_BOT_USER_TOKEN = os.environ['FOOSBOT_BOT_USER_TOKEN']
@@ -35,7 +32,15 @@ def handle_app_mention_events(event, say, ack):
 def handle_game_submission(ack, body, logger):
     HANDLER.handle_game_submission(ack, body, logger)
 
-        
+# Dummy events
+@app.event("message")
+def handle_message_events(body, logger):
+    logger.info(body)
+    
+@app.action("static_select-action")
+def handle_some_action(ack, body, logger):
+    ack()
+    logger.info(body)
     
 if __name__=="__main__":
     SocketModeHandler(app, SLACK_BOT_TOKEN).start()

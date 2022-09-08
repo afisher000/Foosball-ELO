@@ -79,8 +79,6 @@ class Handler():
         temp = self.elo.gamelog.copy()
         temp.Date = temp.Date.map(lambda x: x.strftime('%m/%d/%Y'))
         temp.to_csv('Game Log.csv', index=False)
-        self.elo.gamelog.loc[len(self.elo.gamelog)] = [WO, WD, LO, LD, int(score), 
-                                                      datetime.date.today().strftime('%m/%d/%Y'), color[0]]
         
         
     def display_ratings(self, channel):
@@ -132,14 +130,13 @@ class Handler():
         rating_change = self.update_ratings(WO, WD, LO, LD, score)
         
         if rating_change>0:
-            rating_message = f'Added game to database. Winners gain {rating_change:.1f} rating'
+            rating_message = f'Added game to database.\n{WO} and {WD} beat {LO} and {LD} with {color} 10-{score}\nWinners gain {rating_change:.1f} rating'
         else:
-            rating_message = f'Added game to database. Losers gain {-rating_change:.1f} rating'
+            rating_message = f'Added game to database.\n{WO} and {WD} beat {LO} and {LD} with {color} 10-{score}\nLosers gain {-rating_change:.1f} rating'
             
             
         
         # Update chat
-
         self.app.client.chat_delete(token=self.SLACK_BOT_USER_TOKEN,
                                    channel=channel_id, 
                                    ts=ts,
@@ -171,10 +168,16 @@ class Handler():
                     @foosbot newgame()
                     @foosbot newplayer(new_player_name)
                     @foosbot ratings()''')
-            
+                                
         elif keyword=='ratings':
             self.display_ratings(event['channel'])
-
+        else:
+            say(token=self.SLACK_BOT_USER_TOKEN, 
+                text='''Did not understand command...\n
+                    The following are possible commands:
+                    @foosbot newgame()
+                    @foosbot newplayer(new_player_name)
+                    @foosbot ratings()''')
 
             
             
