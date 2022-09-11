@@ -31,6 +31,12 @@ def handle_app_mention_events(event, say, ack):
 @app.action("submit_game-action")
 def handle_game_submission(ack, body, logger):
     HANDLER.handle_game_submission(ack, body, logger)
+    
+@app.action("cancel_message")
+def handle_cancellation(ack, body, logger):
+    HANDLER.handle_cancellation(ack, body, logger)
+    
+
 
 # Dummy events
 @app.event("message")

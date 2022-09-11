@@ -33,7 +33,11 @@ class Blocks():
                  }
         return block
     
-    
+    def actions(self, *args):
+        elements = [arg for arg in args]
+        block = {'type':'actions',
+                 'elements':elements}
+        return block
     
     def static_select(self, block_id, text, items, 
                       action_id='static_select-action',

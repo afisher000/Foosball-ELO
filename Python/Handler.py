@@ -10,29 +10,15 @@ import numpy as np
 from Blocks import Blocks
 import re
 import datetime
+import matplotlib.pyplot as plt
 
-
+elo = ELO('Game Log.csv', k=64, spread=200)
+elo.simulate()
+players = np.unique(elo.gamelog[['WO','WD','LO','LD']].values)
+ratings = elo.get_ratings()
+        
+        
 # TO IMPLEMENT:
-    # Reformat menus, put players on one line
-    
-    # Include cancel buttons for messages (help keep channel clean)
-    
-    # colorbias()
-        # return stats for different colors
-        # image of distributions along with mean and std?
-    
-    # stats(player)
-        # Give stats for all time and last month
-        # Games, offensive win pct, defensive win pct, color pct
-        
-    # matchup(p1, p2, q1, q2)
-        # Find stats on games between (p1, p2) and (q1, q2).
-        # Good way to parse input like p1, q1? Use semicolon to separate teams?
-        
-    # tenzero(player)
-        # return list of ten zeros
-        # optionally, restrict to ten zeros for given player
-        
         
 class Handler():
     def __init__(self, app, SLACK_BOT_TOKEN, SLACK_BOT_USER_TOKEN):
@@ -44,6 +30,14 @@ class Handler():
         self.SLACK_BOT_USER_TOKEN = SLACK_BOT_USER_TOKEN
         self.SLACK_BOT_TOKEN = SLACK_BOT_TOKEN
         self.app = app
+        
+        self.possible_commands = '''The following are possible commands:
+            @foosbot newgame(WO, WD, LO, LD, score, winner_color)
+            @foosbot newplayer(new_player_name)
+            @foosbot ratings()
+            @foosbot matchup(team1_players;team2_players)
+            @foosbot tenzeros(optional_player_name)
+            @foosbot colorbias()'''
 
     def parse_call(self, text, say):
         regex = re.compile('(<[^>]*>)([\w\s]*)\(([^\)]*)\)')
@@ -58,7 +52,74 @@ class Handler():
         
         return keyword, item
 
+    def find_matchups(self, channel, item):
+        # Parse player inputs
+        error = {'state':False, 'message':''}
+        team_strs = item.split(';')
+        team1_list = [player.strip() for player in team_strs[0].split(',')]
+        team1_set = set(team1_list)
+        
+        if len(team_strs)>1:
+            team2_list = [player.strip() for player in team_strs[1].split(',')]
+            team2_set = set(team2_list)
+        else:
+            team2_list = []
+            team2_set = {}
 
+        if not team1_set.union(team2_set).issubset(set(players)):
+            error = {'state':True, 'message':'Unrecognized player'}
+            
+        if len(team1_set.intersection(team2_set))>0:
+            error = {'state':True, 'message':'Player exists on both teams'}
+            
+        if len(team1_list)>len(team1_set) or len(team1_list)>2:
+            error = {'state':True, 'message':'Duplicate or too many players on team1'}
+        
+        if len(team2_list)>len(team2_set) or len(team2_list)>2:
+            error = {'state':True, 'message':'Duplicate or too many players on team2'}
+            
+        if error['state']:
+            self.app.client.chat_postMessage(token=self.SLACK_BOT_USER_TOKEN,
+                channel=channel,
+                text=error['message'])  
+            return
+        
+        # Find games where team1 wins and team1 loses
+        gl = self.elo.gamelog
+        cond_win = gl.any(axis=1) #start with all trues
+        cond_loss = gl.any(axis=1) 
+        for player in team1_list:
+            cond_win &= (gl==player)[['WO','WD']].any(axis=1)
+            cond_loss &= (gl==player)[['LO','LD']].any(axis=1)
+        for player in team2_list:
+            cond_win &= (gl==player)[['LO','LD']].any(axis=1)
+            cond_loss  &= (gl==player)[['WO','WD']].any(axis=1)
+        
+        
+        column_name = ','.join(team1_list) + ' vs. ' + ','.join(team2_list)
+        wins = cond_win.sum().round()
+        losses = cond_loss.sum().round()
+        games = wins+losses
+        gl_loss = gl[cond_loss]
+        gl_win = gl[cond_win]
+        
+        
+        data = {'Games':games,
+                'Wins':wins,
+                'Losses':losses,
+                'Win_pct':round(wins/games*100, 2),
+                'Margin': round((wins*10+gl_loss.Score.sum() - losses*10 - gl_win.Score.sum())/games, 2),
+                'Blue_pct': round(((gl_win.Color=='b').sum()+(gl_loss.Color=='r').sum())/(len(gl_win.Color.dropna())+len(gl_loss.Color.dropna())), 2)
+                }
+        statistics = pd.DataFrame(data.values(), index=data.keys(), columns=[column_name])
+        
+        # print table
+        self.app.client.chat_postMessage(token=self.SLACK_BOT_USER_TOKEN,
+            channel=channel,
+            text='Matchup Statistics',
+            blocks = [self.Blocks.markdown(statistics.to_markdown())])
+        return
+    
     def new_game(self, channel, item=''):
         player_select = [None]*4
         color_select = score_select = None
@@ -94,7 +155,8 @@ class Handler():
                                       initial_option = color_select),
             self.Blocks.static_select('score_id', 'Score', range(10),
                                       initial_option = score_select),
-            self.Blocks.button('button_id', 'Add to Database', 'Submit', action_id='submit_game-action')
+            self.Blocks.actions(self.Blocks.button('cancel_id','','Cancel', action_id='cancel_message')['accessory'],
+                                self.Blocks.button('submit_id','','Add to Database', action_id='submit_game-action')['accessory'])
             ] 
 
         self.app.client.chat_postMessage(
@@ -105,6 +167,43 @@ class Handler():
             )
         return
 
+    def player_stats(self, player):
+        # Games, offensive win pct, defensive win pct, color pct
+        gl_all = self.elo.gamelog[(self.elo.gamelog==player).any(axis=1)]
+        month_ago = datetime.datetime.today() - datetime.timedelta(30)
+        gl_month = gl_all[gl_all.Date>month_ago].copy()
+        
+        def stats_from_subtable(gl):
+            stats = {}
+            counts = (gl==player).sum()
+            
+            win_colors = gl[(player==gl[['WO','WD']]).any(axis=1)].Color.dropna().value_counts()
+            lose_colors = gl[(player==gl[['LO','LD']]).any(axis=1)].Color.dropna().value_counts()
+            if not hasattr(win_colors, 'b'):
+                win_colors['b']=0
+            if not hasattr(lose_colors, 'r'):
+                lose_colors['r']=0
+                
+            games = counts.sum()
+            off_games = counts.WO + counts.LO
+            def_games = counts.WD + counts.LD
+            
+            stats['games'] = games
+            if off_games==0:
+                stats['off_win_pct'] = -1
+            else:
+                stats['off_win_pct'] = round(counts.WO/off_games*100)
+                
+            if def_games==0:
+                stats['def_win_pct']  = -1
+            else:
+                stats['def_win_pct']  = round(counts.WD/def_games*100) 
+            stats['blue_pct']  = round((win_colors.b + lose_colors.r) / (win_colors.sum() + lose_colors.sum())*100)
+            return stats
+
+        
+        return pd.DataFrame({'Last Month':stats_from_subtable(gl_month),
+                             'All Time':stats_from_subtable(gl_all)})
 
     def update_ratings(self, WO, WD, LO, LD, score):
         # Compute update ratings
@@ -148,6 +247,17 @@ class Handler():
                                     text='Ratings',
                                     blocks = [self.Blocks.markdown(rating_table.to_markdown())])
             
+        
+    def handle_cancellation(self, ack, body, logger):
+        ack()
+        ts = body['message']['ts']
+        channel_id = body['channel']['id']
+        self.app.client.chat_delete(token=self.SLACK_BOT_USER_TOKEN,
+                                   channel=channel_id, 
+                                   ts=ts,
+                                   blocks=None)
+        return
+        
         
         
     def handle_game_submission(self, ack, body, logger):
@@ -198,7 +308,6 @@ class Handler():
                     
     def handle_message_events(self, body, logger):
         logger.info(body)
-        
 
     def handle_app_mention_events(self, event, say, ack):
         ack()
@@ -210,24 +319,64 @@ class Handler():
             
         elif keyword=='newplayer':
             self.players = np.append(self.players, item)
+            self.ratings[item+'_def'] = 1000
+            self.ratings[item+'_off'] = 1000
             say(token=self.SLACK_BOT_USER_TOKEN, text=f'Added new player "{item}"')
             
-        elif keyword=='help':
-            say(token=self.SLACK_BOT_USER_TOKEN, 
-                text='''The following are possible commands:
-                    @foosbot newgame()
-                    @foosbot newplayer(new_player_name)
-                    @foosbot ratings()''')
+
                                 
         elif keyword=='ratings':
             self.display_ratings(event['channel'])
+            
+        elif keyword=='tenzeros':
+            tenzeros = self.elo.gamelog[self.elo.gamelog.Score==0]
+            if item=='' or item is None:
+                self.app.client.chat_postMessage(token=self.SLACK_BOT_USER_TOKEN,
+                            channel=event['channel'],
+                            text='Ten-Zero Games',
+                            blocks = [self.Blocks.markdown(tenzeros.to_markdown())])
+            else:
+                player_tenzeros = tenzeros[(tenzeros==item).any(axis=1)]
+                self.app.client.chat_postMessage(token=self.SLACK_BOT_USER_TOKEN,
+                            channel=event['channel'],
+                            text=f'Ten-Zero Games involving {item}',
+                            blocks = [self.Blocks.markdown(player_tenzeros.to_markdown())])
+                
+                
+        elif keyword=='stats':
+            if item in self.players:
+                self.app.client.chat_postMessage(token=self.SLACK_BOT_USER_TOKEN,
+                            channel=event['channel'],
+                            text=f'Stats for {item}',
+                            blocks = [self.Blocks.markdown(self.player_stats(item).to_markdown())])
+            
+        elif keyword=='colorbias':
+            gl = elo.get_par().dropna() #adds 'points_gained' column
+            plt.ioff() #ensure figure does not display
+            gl.plot.scatter(x='Date',y='points_gained', c='Color').get_figure().savefig('colorbias.png')
+            plt.ion()
+            
+            blue_dist = gl[gl.Color=='b'].points_gained.agg(['mean','std'])
+            red_dist = gl[gl.Color=='r'].points_gained.agg(['mean','std'])
+        
+            
+            
+            message_text = f"Mean and Std: Blue = ({blue_dist['mean']:.1f}, {blue_dist['std']:.1f}), Red = ({red_dist['mean']:.1f}, {red_dist['std']:.1f})"
+            self.app.client.files_upload(token=self.SLACK_BOT_USER_TOKEN,
+                                         file='colorbias.png',
+                                         channels=event['channel'], 
+                                         initial_comment = message_text)
+            
+        elif keyword=='matchup':
+            self.find_matchups(event['channel'], item)
+            
+            
+        elif keyword=='help':
+            say(token=self.SLACK_BOT_USER_TOKEN, 
+                text=self.possible_commands)
         else:
             say(token=self.SLACK_BOT_USER_TOKEN, 
-                text='''Did not understand command...\n
-                    The following are possible commands:
-                    @foosbot newgame(WO, WD, LO, LD, score, color)
-                    @foosbot newplayer(new_player_name)
-                    @foosbot ratings()''')
+                text='Did not understand command...\n' + self.possible_commands)
 
             
             
