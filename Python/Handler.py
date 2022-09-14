@@ -19,7 +19,10 @@ ratings = elo.get_ratings()
         
         
 # TO IMPLEMENT:
-        
+    # Only allow newgame and newplayer in foosball channel
+    # Only allow rest in direct messages    
+    
+    
 class Handler():
     def __init__(self, app, SLACK_BOT_TOKEN, SLACK_BOT_USER_TOKEN):
         self.elo = ELO('Game Log.csv', k=64, spread=200)
@@ -32,22 +35,21 @@ class Handler():
         self.app = app
         
         self.possible_commands = '''The following are possible commands:
-            @foosbot newgame(WO, WD, LO, LD, score, winner_color)
-            @foosbot newplayer(new_player_name)
-            @foosbot ratings()
-            @foosbot matchup(team1_players;team2_players)
-            @foosbot tenzeros(optional_player_name)
-            @foosbot colorbias()'''
+            newgame(WO, WD, LO, LD, score, winner_color)
+            newplayer(new_player_name)
+            ratings()
+            matchup(team1_players;team2_players)
+            tenzeros(optional_player_name)
+            colorbias()
+            help()'''
 
     def parse_call(self, text, say):
-        regex = re.compile('(<[^>]*>)([\w\s]*)\(([^\)]*)\)')
+        regex = re.compile('^([\w\s]*)\(([^\)]*)\)$')
         try:
             groups = regex.search(text).groups()
-            mention, keyword, item = [group.strip() for group in groups]
+            keyword, item = [group.strip().lower() for group in groups]
         except:
-            say(token=self.SLACK_BOT_USER_TOKEN, 
-                text='''Cannot parse input''')
-            keyword = 'help'
+            keyword = None
             item = None
         
         return keyword, item
@@ -103,6 +105,11 @@ class Handler():
         gl_loss = gl[cond_loss]
         gl_win = gl[cond_win]
         
+        if games==0:
+            self.app.client.chat_postMessage(token=self.SLACK_BOT_USER_TOKEN,
+                channel=channel,
+                text='No results')
+            return
         
         data = {'Games':games,
                 'Wins':wins,
@@ -224,7 +231,7 @@ class Handler():
     def update_gamelog(self, WO, WD, LO, LD, score, color):
         # Add to gamelog and save
         self.elo.gamelog.loc[len(self.elo.gamelog)] = [WO, WD, LO, LD, int(score), 
-                                                       datetime.date.today(), color[0]]
+                                                       datetime.datetime.today(), color[0]]
         temp = self.elo.gamelog.copy()
         temp.Date = temp.Date.map(lambda x: x.strftime('%m/%d/%Y'))
         temp.to_csv('Game Log.csv', index=False)
@@ -305,13 +312,21 @@ class Handler():
                                         channel=channel_id,
                                         text=rating_message)
         logger.info(body)
-                    
-    def handle_message_events(self, body, logger):
-        logger.info(body)
 
-    def handle_app_mention_events(self, event, say, ack):
+
+    def handle_message_events(self, event, say, ack):
         ack()
+        
+        if 'text' not in event.keys():
+            return
+        
         keyword, item = self.parse_call(event['text'], say)
+        
+        # Only respond to foosball channel or direct messages
+        if event['channel'][0] != 'D':
+            if event['channel'] not in ['C040Z2PRRU2']:
+                print(event['channel'])
+                return
         
         # new game
         if keyword=='newgame':
@@ -374,9 +389,7 @@ class Handler():
         elif keyword=='help':
             say(token=self.SLACK_BOT_USER_TOKEN, 
                 text=self.possible_commands)
-        else:
-            say(token=self.SLACK_BOT_USER_TOKEN, 
-                text='Did not understand command...\n' + self.possible_commands)
+
 
             
             
