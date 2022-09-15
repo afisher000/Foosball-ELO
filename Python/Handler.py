@@ -11,6 +11,8 @@ from Blocks import Blocks
 import re
 import datetime
 import matplotlib.pyplot as plt
+import pickle
+
 
 elo = ELO('Game Log.csv', k=64, spread=200)
 elo.simulate()
@@ -35,13 +37,16 @@ class Handler():
         self.app = app
         
         self.possible_commands = '''The following are possible commands:
-            newgame(WO, WD, LO, LD, score, winner_color)
-            newplayer(new_player_name)
-            ratings()
-            matchup(team1_players;team2_players)
-            tenzeros(optional_player_name)
-            colorbias()
-            help()'''
+        foosball channel: newgame(WO, WD, LO, LD, score, winner_color)
+        foosball channel: newplayer(new_player_name)
+        foosbot DM: ratings()
+        foosbot DM: matchup(team1_players;team2_players)
+        foosbot DM: tenzeros(optional_player_name)
+        foosbot DM: colorbias()
+        foosbot DM: last(num_games)
+        foosball channel and foosbot DM: help()
+        For more detailed info, right click foosbot app -> View app details ->
+        Configuration -> Description'''
 
     def parse_call(self, text, say):
         regex = re.compile('^([\w\s]*)\(([^\)]*)\)$')
@@ -316,79 +321,94 @@ class Handler():
 
     def handle_message_events(self, event, say, ack):
         ack()
+        foosball_channel = 'C042YTYSDJ5'
+        andy_user = 'W01A1T44K2B'
+        
+        # if event['user'] != andy_user:
+        #     print('Not Andrew posting, in testing mode...')
+        #     return
         
         if 'text' not in event.keys():
+            print('No "text" attribute in event object')
             return
         
         keyword, item = self.parse_call(event['text'], say)
         
-        # Only respond to foosball channel or direct messages
-        if event['channel'][0] != 'D':
-            if event['channel'] not in ['C040Z2PRRU2']:
-                print(event['channel'])
-                return
-        
-        # new game
-        if keyword=='newgame':
-            self.new_game(event['channel'], item)
-            
-        elif keyword=='newplayer':
-            self.players = np.append(self.players, item)
-            self.ratings[item+'_def'] = 1000
-            self.ratings[item+'_off'] = 1000
-            say(token=self.SLACK_BOT_USER_TOKEN, text=f'Added new player "{item}"')
-            
 
-                                
-        elif keyword=='ratings':
-            self.display_ratings(event['channel'])
+        if event['channel']==foosball_channel:
+            # new game
+            if keyword=='newgame':
+                self.new_game(event['channel'], item)
+                
+            elif keyword=='newplayer':
+                self.players = np.append(self.players, item)
+                self.ratings[item+'_def'] = 1000
+                self.ratings[item+'_off'] = 1000
+                say(token=self.SLACK_BOT_USER_TOKEN, text=f'Added new player "{item}"')
+            elif keyword=='help':
+                say(token=self.SLACK_BOT_USER_TOKEN, 
+                    text=self.possible_commands)
+                
+        elif event['channel'][0] =='D':      
+            print('Direct message')                          
+            if keyword=='ratings':
+                self.display_ratings(event['channel'])
+                
+            elif keyword=='tenzeros':
+                tenzeros = self.elo.gamelog[self.elo.gamelog.Score==0]
+                if item=='' or item is None:
+                    self.app.client.chat_postMessage(token=self.SLACK_BOT_USER_TOKEN,
+                                channel=event['channel'],
+                                text='Ten-Zero Games',
+                                blocks = [self.Blocks.markdown(tenzeros.to_markdown())])
+                else:
+                    player_tenzeros = tenzeros[(tenzeros==item).any(axis=1)]
+                    self.app.client.chat_postMessage(token=self.SLACK_BOT_USER_TOKEN,
+                                channel=event['channel'],
+                                text=f'Ten-Zero Games involving {item}',
+                                blocks = [self.Blocks.markdown(player_tenzeros.to_markdown())])
+                    
+                    
+            elif keyword=='stats':
+                if item in self.players:
+                    self.app.client.chat_postMessage(token=self.SLACK_BOT_USER_TOKEN,
+                                channel=event['channel'],
+                                text=f'Stats for {item}',
+                                blocks = [self.Blocks.markdown(self.player_stats(item).to_markdown())])
+                
+            elif keyword=='colorbias':
+                gl = elo.get_par().dropna() #adds 'points_gained' column
+                plt.ioff() #ensure figure does not display
+                gl.plot.scatter(x='Date',y='points_gained', c='Color').get_figure().savefig('colorbias.png')
+                plt.ion()
+                
+                blue_dist = gl[gl.Color=='b'].points_gained.agg(['mean','std'])
+                red_dist = gl[gl.Color=='r'].points_gained.agg(['mean','std'])
             
-        elif keyword=='tenzeros':
-            tenzeros = self.elo.gamelog[self.elo.gamelog.Score==0]
-            if item=='' or item is None:
-                self.app.client.chat_postMessage(token=self.SLACK_BOT_USER_TOKEN,
-                            channel=event['channel'],
-                            text='Ten-Zero Games',
-                            blocks = [self.Blocks.markdown(tenzeros.to_markdown())])
-            else:
-                player_tenzeros = tenzeros[(tenzeros==item).any(axis=1)]
-                self.app.client.chat_postMessage(token=self.SLACK_BOT_USER_TOKEN,
-                            channel=event['channel'],
-                            text=f'Ten-Zero Games involving {item}',
-                            blocks = [self.Blocks.markdown(player_tenzeros.to_markdown())])
                 
                 
-        elif keyword=='stats':
-            if item in self.players:
-                self.app.client.chat_postMessage(token=self.SLACK_BOT_USER_TOKEN,
-                            channel=event['channel'],
-                            text=f'Stats for {item}',
-                            blocks = [self.Blocks.markdown(self.player_stats(item).to_markdown())])
-            
-        elif keyword=='colorbias':
-            gl = elo.get_par().dropna() #adds 'points_gained' column
-            plt.ioff() #ensure figure does not display
-            gl.plot.scatter(x='Date',y='points_gained', c='Color').get_figure().savefig('colorbias.png')
-            plt.ion()
-            
-            blue_dist = gl[gl.Color=='b'].points_gained.agg(['mean','std'])
-            red_dist = gl[gl.Color=='r'].points_gained.agg(['mean','std'])
-        
-            
-            
-            message_text = f"Mean and Std: Blue = ({blue_dist['mean']:.1f}, {blue_dist['std']:.1f}), Red = ({red_dist['mean']:.1f}, {red_dist['std']:.1f})"
-            self.app.client.files_upload(token=self.SLACK_BOT_USER_TOKEN,
-                                         file='colorbias.png',
-                                         channels=event['channel'], 
-                                         initial_comment = message_text)
-            
-        elif keyword=='matchup':
-            self.find_matchups(event['channel'], item)
-            
-            
-        elif keyword=='help':
-            say(token=self.SLACK_BOT_USER_TOKEN, 
-                text=self.possible_commands)
+                message_text = f"Mean and Std: Blue = ({blue_dist['mean']:.1f}, {blue_dist['std']:.1f}), Red = ({red_dist['mean']:.1f}, {red_dist['std']:.1f})"
+                self.app.client.files_upload(token=self.SLACK_BOT_USER_TOKEN,
+                                             file='colorbias.png',
+                                             channels=event['channel'], 
+                                             initial_comment = message_text)
+                
+            elif keyword=='matchup':
+                self.find_matchups(event['channel'], item)
+                
+            elif keyword=='last':
+                if item.isdigit():
+                    self.app.client.chat_postMessage(token=self.SLACK_BOT_USER_TOKEN,
+                                    channel=event['channel'],
+                                    text=f'Last {int(item)} entries',
+                                    blocks = [self.Blocks.markdown(self.elo.gamelog.iloc[-int(item):].to_markdown())])
+                else:
+                    self.app.client.chat_postMessage(token=self.SLACK_BOT_USER_TOKEN,
+                                    channel=event['channel'],
+                                    text='Argument must be an integer')
+            elif keyword=='help':
+                say(token=self.SLACK_BOT_USER_TOKEN, 
+                    text=self.possible_commands)
 
 
             

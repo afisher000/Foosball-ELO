@@ -11,8 +11,11 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 from Handler import Handler
 
 # Tokens
-SLACK_BOT_TOKEN = os.environ['FOOSBOT_BOT_TOKEN']
-SLACK_BOT_USER_TOKEN = os.environ['FOOSBOT_BOT_USER_TOKEN']
+# SLACK_BOT_TOKEN = os.environ['FOOSBOT_BOT_TOKEN']
+# SLACK_BOT_USER_TOKEN = os.environ['FOOSBOT_BOT_USER_TOKEN']
+
+SLACK_BOT_TOKEN = os.environ['PBPL_FOOSBOT_TOKEN']
+SLACK_BOT_USER_TOKEN = os.environ['PBPL_FOOSBOT_USER_TOKEN']
 app = App(token=SLACK_BOT_USER_TOKEN)
 
 HANDLER = Handler(app, SLACK_BOT_TOKEN, SLACK_BOT_USER_TOKEN)
