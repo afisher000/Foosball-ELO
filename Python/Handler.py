@@ -21,8 +21,8 @@ ratings = elo.get_ratings()
         
         
 # TO IMPLEMENT:
-    # Only allow newgame and newplayer in foosball channel
-    # Only allow rest in direct messages    
+    # change colorbias so that it follows a certain color, not the color of the winner (want ideal average to be 0)
+    # add stats by color
     
     
 class Handler():
@@ -349,8 +349,7 @@ class Handler():
                 say(token=self.SLACK_BOT_USER_TOKEN, 
                     text=self.possible_commands)
                 
-        elif event['channel'][0] =='D':      
-            print('Direct message')                          
+        elif event['channel'][0] =='D':                              
             if keyword=='ratings':
                 self.display_ratings(event['channel'])
                 
