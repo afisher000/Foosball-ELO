@@ -49,8 +49,8 @@ def function_help(argument):
 def parse_slackbot_call(text):
     leftpar = text.find('(')
     rightpar = text.find(')')
-    function = text[:leftpar]
-    argument = text[leftpar+1:rightpar]
+    function = text[:leftpar].strip().lower()
+    argument = text[leftpar+1:rightpar].strip().lower()
     return function, argument
 
 def submit_game(WO, WD, LO, LD, score, date, color):
@@ -117,10 +117,10 @@ def function_newgame(argument):
             if player in players:
                 initial_selections[j] = Blocks.option_object(player)
         if len(args)>4:
-            if args[4] in ['red','blue']:
-                color, score_str = args[4], args[5]
+            if args[4].isalpha():
+                color, score_str = args[4].lower(), args[5]
             else:
-                color, score_str = args[5], args[4]
+                color, score_str = args[5].lower(), args[4]
             if color in ['red','blue']:
                 initial_selections[4] = Blocks.option_object(color)
             if score_str.isnumeric() and int(score_str) in range(10):
@@ -165,7 +165,7 @@ def function_newplayer(argument):
     return post_object
         
 def function_ratings(argument):
-    filter_by = argument if argument in ['offense','defense','total'] else None
+    filter_by = argument if argument in ['offense','defense','total'] else 'total'
     ratings = ELO.get_current_ratings(filter_by)
     post_object = { 
         'blocks':[Blocks.markdown(ratings.to_markdown())],
